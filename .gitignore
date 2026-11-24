@@ -1,0 +1,21 @@
+# Secrets & environment variables
+.env
+*.env.local
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local data samples (raw data belongs in OneLake, never in Git)
+*.parquet
+*.csv
+*.zip
+
+# OS & editor metadata
+.DS_Store
+.vscode/
+.idea/
