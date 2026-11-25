@@ -1,47 +1,46 @@
-# Microsoft Fabric — Unified Analytics Platform
+# Databricks NYC Unified Analytics Platform
 
-A unified data engineering and analytics platform built on **Microsoft Fabric** using a **Medallion Architecture (Bronze → Silver → Gold)**. It combines NYC urban mobility, air quality, and macroeconomic data to study how transport intensity, environmental quality, and economic indicators intersect.
+Medallion lakehouse project built on **Databricks Free Edition** (Unity Catalog, Delta Lake, Serverless Spark, SQL Warehouse, Lakeflow Jobs, AI/BI Dashboards). Combines NYC Yellow Taxi mobility data, OpenAQ air quality measurements, and World Bank GDP / ECB FX macro indicators.
 
-## Data Sources (Core)
+## Data Sources
 
-| Domain | Source | Format | Ingestion Method |
+| Domain | Source | Format | Target Layer |
 | :--- | :--- | :--- | :--- |
-| **Mobility** | NYC TLC Yellow Taxi Trips & Taxi Zone Lookup | Parquet / CSV | Fabric Data Pipeline |
-| **Air Quality** | OpenAQ API v3 (NYC sensors: PM2.5, NO2, O3) | JSON (paginated REST API) | Dataflow Gen2 |
-| **Economy** | World Bank GDP (USA) & ECB Daily FX (USD/EUR) | JSON / CSV | Dataflow Gen2 |
+| Mobility | NYC TLC Yellow Taxi Trips + Taxi Zone Lookup | Parquet / CSV | `bronze` -> `silver` -> `gold` |
+| Air Quality | OpenAQ API v3 (NYC sensors: PM2.5, NO2, O3) | Paginated JSON API | `bronze` -> `silver` -> `gold` |
+| Economy | World Bank USA GDP & ECB Daily USD/EUR FX | JSON / CSV | `bronze` -> `silver` -> `gold` |
+| Weather (ext) | Open-Meteo Archive / Forecast API (NYC) | JSON API | `bronze` -> `gold` -> TimescaleDB |
 
-## Architecture Overview
+## Architecture
 
 ```mermaid
 flowchart LR
-    TLC["NYC TLC Parquet + Zones"] --> PIP["Data Pipeline"]
-    OAQ["OpenAQ API v3"] --> DF["Dataflow Gen2"]
-    ECON["World Bank GDP & ECB FX"] --> DF
-
-    PIP --> BRONZE["lh_bronze (OneLake Raw)"]
-    DF --> BRONZE
-    BRONZE --> SILVER["lh_silver (PySpark + Delta OCC)"]
-    SILVER --> GOLD["wh_gold (Warehouse Star Schema)"]
-    GOLD --> PBI["Power BI Report"]
+    TLC["NYC TLC Parquet + Zones"] --> BRONZE["Unity Catalog: bronze + Volume"]
+    OAQ["OpenAQ API v3"] --> BRONZE
+    ECON["World Bank GDP & ECB FX"] --> BRONZE
+    BRONZE --> SILVER["Unity Catalog: silver (PySpark + Delta OCC)"]
+    SILVER --> GOLD["Unity Catalog: gold (Star Schema)"]
+    GOLD --> DASH["Databricks AI/BI Dashboard"]
+    GOLD --> WSYNC["Weather Sync -> TimescaleDB -> Grafana"]
+    GOLD --> DQ["Great Expectations -> Discord Bot"]
 ```
 
-### Key Architectural Principles
-- **Medallion Layers:** Raw ingestion (`lh_bronze`) → cleaned, deduplicated, partitioned Delta tables (`lh_silver`) → Star Schema (`wh_gold`: `FactTaxiDaily`, `FactAirQualityDaily`, `DimDate`, `DimZone`, `DimFX`, `DimGDP`).
-- **Optimistic Concurrency Control (DP-700):** Delta Lake native OCC with partitioned `MERGE INTO` + conflict retry, versioned ETL watermark control table (`row_version`), and Fabric Warehouse Snapshot Isolation.
-- **Minimal Custom Code:** Built with native Fabric components (Data Pipelines, Dataflows Gen2, Lakehouse, Warehouse, Power BI, Git Integration) and standard libraries.
+## Key Features
+- **Medallion Architecture:** Raw landing in Unity Catalog Volumes + Bronze Delta tables -> cleaned & deduplicated Silver tables -> Gold Star Schema (`fact_taxi_daily`, `fact_air_quality_daily`, `dim_date`, `dim_zone`, `dim_fx`, `dim_gdp`).
+- **Optimistic Concurrency Control:** Native Delta Lake OCC (`WriteSerializable` on fact/silver tables, `Serializable` on watermark control table), idempotent `MERGE INTO` with `tenacity` conflict retry, and explicit `row_version` optimistic locking.
+- **Orchestration & Governance:** Serverless Lakeflow Job (DAG + daily schedule), Unity Catalog automatic lineage, table/column metadata comments, and row filter example.
+- **External Integrations:** Scheduled weather enrichment sync into TimescaleDB + Grafana (Docker Compose) and on-demand Great Expectations data quality reports triggered via Discord bot.
 
-## Repository Structure
+## Repository Layout
 
 ```text
 .
-├── fabric/        # Synced directly with Microsoft Fabric Workspace via Git Integration
-├── docs/          # Data dictionary, lineage diagrams, governance & OCC documentation
-├── infra/         # External integration infrastructure (Docker Compose, Grafana)
-└── integrations/  # External services (weather TSDB sync, Great Expectations + Discord bot)
+├── databricks.yml      # Databricks Asset Bundle (DABs) config
+├── resources/          # Lakeflow Job definitions
+├── src/                # Setup SQL, Bronze/Silver PySpark notebooks, Gold SQL
+├── dashboards/         # Databricks AI/BI Dashboard (.lvdash.json)
+├── docs/               # Data dictionary, lineage, governance & OCC notes
+├── infra/              # Docker Compose (TimescaleDB + provisioned Grafana)
+├── integrations/       # External Python services (weather sync, GX + Discord bot)
+└── tests/              # Unit tests (pytest)
 ```
-
-## Key Analytical Questions
-1. How does traffic intensity (trips per day) relate to air quality (PM2.5 / NO2 levels) in NYC?
-2. Which zones or times of day show the strongest link between taxi demand and pollution peaks?
-3. What is the average revenue per trip in USD vs EUR, and how does exchange rate fluctuation affect it?
-4. Over multiple years, do we see mobility/economic growth at the expense of environmental quality?
