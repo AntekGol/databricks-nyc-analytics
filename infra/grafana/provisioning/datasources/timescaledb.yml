@@ -10,7 +10,7 @@ datasources:
     isDefault: true
     editable: true
     secureJsonData:
-      password: ${POSTGRES_PASSWORD:-postgres}
+      password: $TSDB_PASSWORD
     jsonData:
       database: weather_tsdb
       sslmode: disable

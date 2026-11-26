@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${TSDB_USER:-postgres}
       POSTGRES_PASSWORD: ${TSDB_PASSWORD:-postgres}
     ports:
-      - "${TSDB_PORT:-5432}:5432"
+      - "${TSDB_PORT:-5433}:5432"
     volumes:
       - tsdb_data:/var/lib/postgresql/data
       - ./timescaledb/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
@@ -30,6 +30,7 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/nyc_weather.json
+      TSDB_PASSWORD: ${TSDB_PASSWORD:-postgres}
     ports:
       - "3000:3000"
     volumes:

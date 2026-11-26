@@ -64,7 +64,7 @@ def fetch_enriched_weather() -> list[tuple]:
 def upsert_to_timescaledb(rows: list[tuple]) -> int:
     conninfo = (
         f"host={os.getenv('TSDB_HOST', 'localhost')} "
-        f"port={os.getenv('TSDB_PORT', '5432')} "
+        f"port={os.getenv('TSDB_PORT', '5433')} "
         f"dbname={os.getenv('TSDB_DB', 'weather_tsdb')} "
         f"user={os.getenv('TSDB_USER', 'postgres')} "
         f"password={os.getenv('TSDB_PASSWORD', 'postgres')}"
