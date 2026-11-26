@@ -1,0 +1,39 @@
+# local time-series stack: timescaledb + auto-provisioned grafana
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: nyc_timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${TSDB_DB:-weather_tsdb}
+      POSTGRES_USER: ${TSDB_USER:-postgres}
+      POSTGRES_PASSWORD: ${TSDB_PASSWORD:-postgres}
+    ports:
+      - "${TSDB_PORT:-5432}:5432"
+    volumes:
+      - tsdb_data:/var/lib/postgresql/data
+      - ./timescaledb/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TSDB_USER:-postgres} -d ${TSDB_DB:-weather_tsdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: nyc_grafana
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/nyc_weather.json
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+volumes:
+  tsdb_data:

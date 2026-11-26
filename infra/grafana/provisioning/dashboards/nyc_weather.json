@@ -1,0 +1,145 @@
+{
+  "uid": "nyc-enriched-weather",
+  "title": "NYC Enriched Weather Analytics",
+  "tags": ["nyc", "weather", "timescaledb"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "2023-06-01T00:00:00.000Z",
+    "to": "2026-01-02T00:00:00.000Z"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Synced Weather Days",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS days_synced FROM enriched_weather_daily;"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Avg Temperature (C)",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {"defaults": {"unit": "celsius", "decimals": 1}},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT ROUND(AVG(temp_mean_c)::numeric, 1) AS avg_temp FROM enriched_weather_daily WHERE $__timeFilter(weather_date);"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Avg Daily Taxi Trips",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {"defaults": {"decimals": 0}},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT ROUND(AVG(total_trips)::numeric, 0) AS avg_trips FROM enriched_weather_daily WHERE total_trips IS NOT NULL AND $__timeFilter(weather_date);"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Avg Daily PM2.5 (ug/m3)",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {"defaults": {"decimals": 2}},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT ROUND(AVG(pm25_avg)::numeric, 2) AS avg_pm25 FROM enriched_weather_daily WHERE pm25_avg IS NOT NULL AND $__timeFilter(weather_date);"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "NYC Daily Temperature (Min / Mean / Max C)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {"defaults": {"unit": "celsius"}},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT weather_date AS time, temp_mean_c AS \"Mean C\", temp_max_c AS \"Max C\", temp_min_c AS \"Min C\" FROM enriched_weather_daily WHERE $__timeFilter(weather_date) ORDER BY weather_date;"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Precipitation (mm) vs Daily PM2.5 (ug/m3)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT weather_date AS time, precipitation_mm AS \"Precipitation (mm)\", pm25_avg AS \"PM2.5 (ug/m3)\" FROM enriched_weather_daily WHERE $__timeFilter(weather_date) ORDER BY weather_date;"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "barchart",
+      "title": "Avg Daily Taxi Trips & PM2.5 by Weather Condition",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT weather_condition, ROUND(AVG(total_trips)::numeric, 0) AS avg_trips FROM enriched_weather_daily WHERE total_trips IS NOT NULL GROUP BY weather_condition ORDER BY avg_trips DESC;"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Wind Speed (km/h) vs Daily PM2.5",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT weather_date AS time, wind_max_kmh AS \"Max Wind (km/h)\", pm25_avg AS \"PM2.5 (ug/m3)\" FROM enriched_weather_daily WHERE $__timeFilter(weather_date) ORDER BY weather_date;"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Enriched Weather & Mobility Samples",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20},
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT weather_date::date AS date, weather_condition, temp_mean_c, precipitation_mm, wind_max_kmh, total_trips, avg_revenue_per_trip_usd, pm25_avg, no2_avg FROM enriched_weather_daily WHERE total_trips IS NOT NULL ORDER BY weather_date DESC LIMIT 50;"
+        }
+      ]
+    }
+  ]
+}
