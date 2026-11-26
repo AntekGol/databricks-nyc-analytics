@@ -1,0 +1,886 @@
+{
+  "datasets": [
+    {
+      "name": "ds_daily",
+      "displayName": "Daily Mobility and Air Quality",
+      "queryLines": [
+        "SELECT trip_date, year, total_trips, total_revenue_usd, total_revenue_eur,\n",
+        "       avg_revenue_per_trip_usd, avg_revenue_per_trip_eur, usd_per_eur,\n",
+        "       pm25_avg, no2_avg, o3_avg\n",
+        "FROM workspace.gold.vw_mobility_air_quality_daily\n",
+        "ORDER BY trip_date"
+      ]
+    },
+    {
+      "name": "ds_borough_trips",
+      "displayName": "Taxi Trips by Borough",
+      "queryLines": [
+        "SELECT borough, SUM(trip_count) AS total_trips,\n",
+        "       ROUND(AVG(avg_fare_usd), 2) AS avg_fare_usd,\n",
+        "       ROUND(SUM(total_revenue_usd), 2) AS total_revenue_usd\n",
+        "FROM workspace.gold.fact_taxi_daily\n",
+        "WHERE borough IS NOT NULL\n",
+        "GROUP BY borough\n",
+        "ORDER BY total_trips DESC"
+      ]
+    },
+    {
+      "name": "ds_top_zones",
+      "displayName": "Top 15 Pickup Zones",
+      "queryLines": [
+        "SELECT z.borough, z.zone_name, SUM(f.trip_count) AS total_trips,\n",
+        "       ROUND(AVG(f.avg_fare_usd), 2) AS avg_fare_usd,\n",
+        "       ROUND(AVG(f.avg_trip_duration_min), 1) AS avg_duration_min,\n",
+        "       ROUND(SUM(f.total_revenue_usd), 2) AS total_revenue_usd\n",
+        "FROM workspace.gold.fact_taxi_daily f\n",
+        "JOIN workspace.gold.dim_zone z ON f.zone_key = z.zone_key\n",
+        "GROUP BY z.borough, z.zone_name\n",
+        "ORDER BY total_trips DESC\n",
+        "LIMIT 15"
+      ]
+    },
+    {
+      "name": "ds_aq_pm25_borough",
+      "displayName": "Daily PM2.5 by Borough",
+      "queryLines": [
+        "SELECT measurement_date, borough, avg_value AS pm25_avg\n",
+        "FROM workspace.gold.fact_air_quality_daily\n",
+        "WHERE parameter = 'pm25'\n",
+        "ORDER BY measurement_date"
+      ]
+    },
+    {
+      "name": "ds_aq_summary",
+      "displayName": "Pollutant Summary by Borough",
+      "queryLines": [
+        "SELECT borough, parameter, units,\n",
+        "       ROUND(AVG(avg_value), 3) AS mean_value,\n",
+        "       ROUND(MIN(min_value), 3) AS min_value,\n",
+        "       ROUND(MAX(max_value), 3) AS max_value,\n",
+        "       SUM(measurement_count) AS total_readings\n",
+        "FROM workspace.gold.fact_air_quality_daily\n",
+        "GROUP BY borough, parameter, units\n",
+        "ORDER BY parameter, mean_value DESC"
+      ]
+    },
+    {
+      "name": "ds_hourly",
+      "displayName": "Hourly Mobility vs Air Quality",
+      "queryLines": [
+        "SELECT hour_of_day, total_trips, avg_revenue_usd, pm25_avg, no2_avg\n",
+        "FROM workspace.gold.vw_hourly_mobility_air_quality\n",
+        "ORDER BY hour_of_day"
+      ]
+    },
+    {
+      "name": "ds_economy",
+      "displayName": "Economic Impact and FX",
+      "queryLines": [
+        "SELECT year, year_month, total_trips, total_revenue_usd, total_revenue_eur,\n",
+        "       avg_revenue_per_trip_usd, avg_revenue_per_trip_eur, avg_usd_per_eur,\n",
+        "       ROUND(gdp_usd / 1e12, 2) AS gdp_trillion_usd, yoy_growth_pct\n",
+        "FROM workspace.gold.vw_economic_impact\n",
+        "ORDER BY year_month"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "mobility",
+      "displayName": "Mobility",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "mob-title",
+            "multilineTextboxSpec": {
+              "lines": ["## NYC Mobility Dashboard"]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "mob-subtitle",
+            "multilineTextboxSpec": {
+              "lines": ["Yellow Taxi daily demand, average revenue per trip, and busiest pickup zones (2023-2025 sample)."]
+            }
+          },
+          "position": {"x": 0, "y": 1, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi-total-trips",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily",
+                  "fields": [
+                    {"name": "sum(total_trips)", "expression": "SUM(`total_trips`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_trips)",
+                  "displayName": "Total Trips",
+                  "format": {
+                    "type": "number",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {"type": "max", "places": 2}
+                  }
+                }
+              },
+              "frame": {"title": "Total Trips", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-avg-rev-usd",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily",
+                  "fields": [
+                    {"name": "avg(avg_revenue_per_trip_usd)", "expression": "AVG(`avg_revenue_per_trip_usd`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(avg_revenue_per_trip_usd)",
+                  "displayName": "Avg Revenue / Trip",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "USD",
+                    "decimalPlaces": {"type": "max", "places": 2}
+                  }
+                }
+              },
+              "frame": {"title": "Avg Revenue per Trip (USD)", "showTitle": true}
+            }
+          },
+          "position": {"x": 4, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-total-rev-usd",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily",
+                  "fields": [
+                    {"name": "sum(total_revenue_usd)", "expression": "SUM(`total_revenue_usd`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_revenue_usd)",
+                  "displayName": "Total Revenue",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "USD",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {"type": "max", "places": 2}
+                  }
+                }
+              },
+              "frame": {"title": "Total Taxi Revenue (USD)", "showTitle": true}
+            }
+          },
+          "position": {"x": 8, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "chart-daily-trips",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily",
+                  "fields": [
+                    {"name": "trip_date", "expression": "`trip_date`"},
+                    {"name": "total_trips", "expression": "`total_trips`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "trip_date", "scale": {"type": "temporal"}, "displayName": "Date"},
+                "y": {"fieldName": "total_trips", "scale": {"type": "quantitative"}, "displayName": "Trips / Day"}
+              },
+              "frame": {"title": "Daily Taxi Trips Over Time", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 6, "height": 5}
+        },
+        {
+          "widget": {
+            "name": "chart-trips-borough",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_borough_trips",
+                  "fields": [
+                    {"name": "borough", "expression": "`borough`"},
+                    {"name": "total_trips", "expression": "`total_trips`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "borough", "scale": {"type": "categorical"}, "displayName": "Borough"},
+                "y": {"fieldName": "total_trips", "scale": {"type": "quantitative"}, "displayName": "Total Trips"}
+              },
+              "frame": {"title": "Taxi Trips by Borough", "showTitle": true}
+            }
+          },
+          "position": {"x": 6, "y": 5, "width": 6, "height": 5}
+        },
+        {
+          "widget": {
+            "name": "table-top-zones",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_top_zones",
+                  "fields": [
+                    {"name": "borough", "expression": "`borough`"},
+                    {"name": "zone_name", "expression": "`zone_name`"},
+                    {"name": "total_trips", "expression": "`total_trips`"},
+                    {"name": "avg_fare_usd", "expression": "`avg_fare_usd`"},
+                    {"name": "avg_duration_min", "expression": "`avg_duration_min`"},
+                    {"name": "total_revenue_usd", "expression": "`total_revenue_usd`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "borough", "displayName": "Borough"},
+                  {"fieldName": "zone_name", "displayName": "Pickup Zone"},
+                  {"fieldName": "total_trips", "displayName": "Total Trips"},
+                  {"fieldName": "avg_fare_usd", "displayName": "Avg Fare ($)"},
+                  {"fieldName": "avg_duration_min", "displayName": "Avg Duration (min)"},
+                  {"fieldName": "total_revenue_usd", "displayName": "Total Revenue ($)"}
+                ]
+              },
+              "frame": {"title": "Top 15 Busiest Pickup Zones", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 10, "width": 12, "height": 6}
+        }
+      ]
+    },
+    {
+      "name": "air_quality",
+      "displayName": "Air Quality",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "aq-title",
+            "multilineTextboxSpec": {
+              "lines": ["## NYC Air Quality Dashboard"]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "aq-subtitle",
+            "multilineTextboxSpec": {
+              "lines": ["Daily OpenAQ pollutant concentrations (PM2.5, NO2, O3) across NYC monitoring stations."]
+            }
+          },
+          "position": {"x": 0, "y": 1, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi-pm25",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily",
+                  "fields": [
+                    {"name": "avg(pm25_avg)", "expression": "AVG(`pm25_avg`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(pm25_avg)",
+                  "displayName": "Avg PM2.5",
+                  "format": {"type": "number-plain", "decimalPlaces": {"type": "max", "places": 2}},
+                  "formatTemplate": "{{ @formatted }} ug/m3"
+                }
+              },
+              "frame": {"title": "Avg Daily PM2.5", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-no2",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily",
+                  "fields": [
+                    {"name": "avg(no2_avg)", "expression": "AVG(`no2_avg`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(no2_avg)",
+                  "displayName": "Avg NO2",
+                  "format": {"type": "number-plain", "decimalPlaces": {"type": "max", "places": 4}},
+                  "formatTemplate": "{{ @formatted }} ppm"
+                }
+              },
+              "frame": {"title": "Avg Daily NO2", "showTitle": true}
+            }
+          },
+          "position": {"x": 4, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-o3",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily",
+                  "fields": [
+                    {"name": "avg(o3_avg)", "expression": "AVG(`o3_avg`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(o3_avg)",
+                  "displayName": "Avg O3",
+                  "format": {"type": "number-plain", "decimalPlaces": {"type": "max", "places": 4}},
+                  "formatTemplate": "{{ @formatted }} ppm"
+                }
+              },
+              "frame": {"title": "Avg Daily O3", "showTitle": true}
+            }
+          },
+          "position": {"x": 8, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "chart-pm25-borough",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_aq_pm25_borough",
+                  "fields": [
+                    {"name": "measurement_date", "expression": "`measurement_date`"},
+                    {"name": "pm25_avg", "expression": "`pm25_avg`"},
+                    {"name": "borough", "expression": "`borough`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "measurement_date", "scale": {"type": "temporal"}, "displayName": "Date"},
+                "y": {"fieldName": "pm25_avg", "scale": {"type": "quantitative"}, "displayName": "PM2.5 (ug/m3)"},
+                "color": {"fieldName": "borough", "scale": {"type": "categorical"}}
+              },
+              "frame": {"title": "Daily PM2.5 Trend by Borough", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 12, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "table-aq-summary",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_aq_summary",
+                  "fields": [
+                    {"name": "borough", "expression": "`borough`"},
+                    {"name": "parameter", "expression": "`parameter`"},
+                    {"name": "units", "expression": "`units`"},
+                    {"name": "mean_value", "expression": "`mean_value`"},
+                    {"name": "min_value", "expression": "`min_value`"},
+                    {"name": "max_value", "expression": "`max_value`"},
+                    {"name": "total_readings", "expression": "`total_readings`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "borough", "displayName": "Borough"},
+                  {"fieldName": "parameter", "displayName": "Pollutant"},
+                  {"fieldName": "units", "displayName": "Units"},
+                  {"fieldName": "mean_value", "displayName": "Mean"},
+                  {"fieldName": "min_value", "displayName": "Min"},
+                  {"fieldName": "max_value", "displayName": "Max"},
+                  {"fieldName": "total_readings", "displayName": "Readings"}
+                ]
+              },
+              "frame": {"title": "Pollutant Breakdown by Borough", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 11, "width": 12, "height": 5}
+        }
+      ]
+    },
+    {
+      "name": "correlation",
+      "displayName": "Mobility vs Air Quality",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "corr-title",
+            "multilineTextboxSpec": {
+              "lines": ["## Mobility vs Air Quality Correlation"]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "corr-subtitle",
+            "multilineTextboxSpec": {
+              "lines": ["Overlaying daily and hourly taxi demand with PM2.5 and NO2 levels to identify traffic-pollution links."]
+            }
+          },
+          "position": {"x": 0, "y": 1, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "combo-daily-trips-pm25",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily",
+                  "fields": [
+                    {"name": "trip_date", "expression": "`trip_date`"},
+                    {"name": "total_trips", "expression": "`total_trips`"},
+                    {"name": "pm25_avg", "expression": "`pm25_avg`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "combo",
+              "encodings": {
+                "x": {"fieldName": "trip_date", "scale": {"type": "temporal"}, "displayName": "Date"},
+                "y": {
+                  "scale": {"type": "quantitative"},
+                  "primary": {
+                    "fields": [{"fieldName": "total_trips", "displayName": "Daily Taxi Trips"}]
+                  },
+                  "secondary": {
+                    "fields": [{"fieldName": "pm25_avg", "displayName": "Avg PM2.5 (ug/m3)"}]
+                  }
+                },
+                "label": {"show": false}
+              },
+              "frame": {"title": "Daily Taxi Volume vs PM2.5 Overlay", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 12, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "combo-hourly-trips-pm25",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_hourly",
+                  "fields": [
+                    {"name": "hour_of_day", "expression": "`hour_of_day`"},
+                    {"name": "total_trips", "expression": "`total_trips`"},
+                    {"name": "pm25_avg", "expression": "`pm25_avg`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "combo",
+              "encodings": {
+                "x": {"fieldName": "hour_of_day", "scale": {"type": "categorical"}, "displayName": "Hour of Day (NYC)"},
+                "y": {
+                  "scale": {"type": "quantitative"},
+                  "primary": {
+                    "fields": [{"fieldName": "total_trips", "displayName": "Hourly Trips"}]
+                  },
+                  "secondary": {
+                    "fields": [{"fieldName": "pm25_avg", "displayName": "Avg PM2.5"}]
+                  }
+                },
+                "label": {"show": false}
+              },
+              "frame": {"title": "Hourly Taxi Demand vs PM2.5 Peaks", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 8, "width": 6, "height": 5}
+        },
+        {
+          "widget": {
+            "name": "scatter-trips-pm25",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily",
+                  "fields": [
+                    {"name": "total_trips", "expression": "`total_trips`"},
+                    {"name": "pm25_avg", "expression": "`pm25_avg`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "scatter",
+              "encodings": {
+                "x": {"fieldName": "total_trips", "scale": {"type": "quantitative"}, "displayName": "Daily Taxi Trips"},
+                "y": {"fieldName": "pm25_avg", "scale": {"type": "quantitative"}, "displayName": "Avg PM2.5 (ug/m3)"}
+              },
+              "frame": {"title": "Daily Trips vs PM2.5 Scatter", "showTitle": true}
+            }
+          },
+          "position": {"x": 6, "y": 8, "width": 6, "height": 5}
+        }
+      ]
+    },
+    {
+      "name": "economy",
+      "displayName": "Economic Impact",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "econ-title",
+            "multilineTextboxSpec": {
+              "lines": ["## Economic Impact Dashboard (USD, EUR & GDP)"]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "econ-subtitle",
+            "multilineTextboxSpec": {
+              "lines": ["Comparing NYC taxi revenues in USD vs EUR using daily ECB FX rates alongside annual USA GDP."]
+            }
+          },
+          "position": {"x": 0, "y": 1, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi-econ-usd",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_economy",
+                  "fields": [
+                    {"name": "avg(avg_revenue_per_trip_usd)", "expression": "AVG(`avg_revenue_per_trip_usd`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(avg_revenue_per_trip_usd)",
+                  "displayName": "Avg / Trip (USD)",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "USD",
+                    "decimalPlaces": {"type": "max", "places": 2}
+                  }
+                }
+              },
+              "frame": {"title": "Avg Revenue / Trip (USD)", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-econ-eur",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_economy",
+                  "fields": [
+                    {"name": "avg(avg_revenue_per_trip_eur)", "expression": "AVG(`avg_revenue_per_trip_eur`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(avg_revenue_per_trip_eur)",
+                  "displayName": "Avg / Trip (EUR)",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "EUR",
+                    "decimalPlaces": {"type": "max", "places": 2}
+                  }
+                }
+              },
+              "frame": {"title": "Avg Revenue / Trip (EUR)", "showTitle": true}
+            }
+          },
+          "position": {"x": 4, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-econ-fx",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_economy",
+                  "fields": [
+                    {"name": "avg(avg_usd_per_eur)", "expression": "AVG(`avg_usd_per_eur`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(avg_usd_per_eur)",
+                  "displayName": "Avg USD/EUR",
+                  "format": {"type": "number-plain", "decimalPlaces": {"type": "max", "places": 4}}
+                }
+              },
+              "frame": {"title": "Avg ECB Rate (USD per 1 EUR)", "showTitle": true}
+            }
+          },
+          "position": {"x": 8, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "bar-rev-usd-eur",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_economy",
+                  "fields": [
+                    {"name": "year_month", "expression": "`year_month`"},
+                    {"name": "total_revenue_usd", "expression": "`total_revenue_usd`"},
+                    {"name": "total_revenue_eur", "expression": "`total_revenue_eur`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "mark": {"layout": "group"},
+              "encodings": {
+                "x": {"fieldName": "year_month", "scale": {"type": "categorical"}, "displayName": "Month"},
+                "y": {
+                  "scale": {"type": "quantitative"},
+                  "fields": [
+                    {"fieldName": "total_revenue_usd", "displayName": "Revenue (USD)"},
+                    {"fieldName": "total_revenue_eur", "displayName": "Revenue (EUR)"}
+                  ]
+                }
+              },
+              "frame": {"title": "Monthly Taxi Revenue: USD vs EUR", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "combo-rev-gdp",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_economy",
+                  "fields": [
+                    {"name": "year_month", "expression": "`year_month`"},
+                    {"name": "total_revenue_usd", "expression": "`total_revenue_usd`"},
+                    {"name": "gdp_trillion_usd", "expression": "`gdp_trillion_usd`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "combo",
+              "encodings": {
+                "x": {"fieldName": "year_month", "scale": {"type": "categorical"}, "displayName": "Month"},
+                "y": {
+                  "scale": {"type": "quantitative"},
+                  "primary": {
+                    "fields": [{"fieldName": "total_revenue_usd", "displayName": "Taxi Revenue (USD)"}]
+                  },
+                  "secondary": {
+                    "fields": [{"fieldName": "gdp_trillion_usd", "displayName": "USA GDP (Trillion USD)"}]
+                  }
+                },
+                "label": {"show": false}
+              },
+              "frame": {"title": "Taxi Revenue vs USA GDP Context", "showTitle": true}
+            }
+          },
+          "position": {"x": 6, "y": 5, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "table-econ",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_economy",
+                  "fields": [
+                    {"name": "year_month", "expression": "`year_month`"},
+                    {"name": "total_trips", "expression": "`total_trips`"},
+                    {"name": "avg_revenue_per_trip_usd", "expression": "`avg_revenue_per_trip_usd`"},
+                    {"name": "avg_revenue_per_trip_eur", "expression": "`avg_revenue_per_trip_eur`"},
+                    {"name": "avg_usd_per_eur", "expression": "`avg_usd_per_eur`"},
+                    {"name": "gdp_trillion_usd", "expression": "`gdp_trillion_usd`"},
+                    {"name": "yoy_growth_pct", "expression": "`yoy_growth_pct`"}
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "year_month", "displayName": "Month"},
+                  {"fieldName": "total_trips", "displayName": "Trips"},
+                  {"fieldName": "avg_revenue_per_trip_usd", "displayName": "Avg / Trip ($)"},
+                  {"fieldName": "avg_revenue_per_trip_eur", "displayName": "Avg / Trip (EUR)"},
+                  {"fieldName": "avg_usd_per_eur", "displayName": "USD / EUR"},
+                  {"fieldName": "gdp_trillion_usd", "displayName": "USA GDP ($T)"},
+                  {"fieldName": "yoy_growth_pct", "displayName": "GDP YoY (%)"}
+                ]
+              },
+              "frame": {"title": "Monthly Economic and FX Summary", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 11, "width": 12, "height": 5}
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {"light": "#FCFCFC", "dark": "#1F272D"},
+      "widgetBackgroundColor": {"light": "#FFFFFF", "dark": "#11171C"},
+      "fontColor": {"light": "#11171C", "dark": "#E8ECF0"},
+      "selectionColor": {"light": "#0072B2", "dark": "#56B4E9"},
+      "visualizationColors": [
+        "#0072B2",
+        "#E69F00",
+        "#009E73",
+        "#CC79A7",
+        "#D55E00",
+        "#56B4E9"
+      ],
+      "widgetHeaderAlignment": "LEFT"
+    }
+  }
+}
