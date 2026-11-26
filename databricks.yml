@@ -1,0 +1,18 @@
+# databricks asset bundle config for nyc unified analytics pipeline
+bundle:
+  name: databricks-nyc-analytics
+
+include:
+  - resources/*.yml
+
+variables:
+  warehouse_id:
+    description: sql warehouse id used for setup and gold sql tasks
+    default: ""
+
+targets:
+  dev:
+    mode: development
+    default: true
+  prod:
+    mode: production
